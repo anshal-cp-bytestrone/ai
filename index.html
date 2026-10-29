@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Image Classifier | Teachable Machine</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #17243b; background: #f3f6fc; color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1000px; margin: auto; padding: 48px 24px; }
+    h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 8px 0 12px; letter-spacing: -.04em; }
+    h2 { font-size: 1.15rem; margin: 0 0 20px; }
+    p { line-height: 1.6; }
+    .eyebrow { color: #4843c4; font-weight: 700; font-size: .8rem; letter-spacing: .12em; }
+    .intro, .hint { color: #53627a; }
+    .hint { font-size: .875rem; margin: 10px 0 0; }
+    .card { background: white; border: 1px solid #dfe5ef; border-radius: 18px; padding: 24px; margin-top: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    label { display: block; font-size: .9rem; font-weight: 600; margin-bottom: 8px; }
+    input[type="url"] { width: 100%; padding: 13px; border: 1px solid #aeb9ce; border-radius: 9px; font: inherit; }
+    input[type="file"] { width: 100%; padding: 8px 0; }
+    fieldset { border: 0; padding: 0; margin: 0 0 20px; }
+    legend { margin-bottom: 12px; font-weight: 600; }
+    .choices { display: flex; flex-wrap: wrap; gap: 20px; }
+    .choices label { margin: 0; display: flex; align-items: center; gap: 7px; }
+    button { border: 0; border-radius: 9px; padding: 13px 18px; font: inherit; font-weight: 600; cursor: pointer; background: #5046d8; color: white; }
+    button:hover:not(:disabled) { background: #3e35b8; }
+    button.secondary { background: #eaeefa; color: #283b64; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    :focus-visible { outline: 3px solid #877cff; outline-offset: 3px; }
+    .preview { margin: 18px 0; aspect-ratio: 1; background: #f6f8fc; border: 1px dashed #b5c1d6; border-radius: 12px; display: grid; place-items: center; overflow: hidden; }
+    .preview img, .preview video { width: 100%; height: 100%; object-fit: cover; min-height: 0; }
+    .preview video { transform: scaleX(-1); }
+    .placeholder { color: #63718a; padding: 20px; text-align: center; }
+    #classify { width: 100%; }
+    #status { min-height: 1.5em; margin: 18px 0 0; font-size: .9rem; }
+    #status[data-error="true"] { color: #b42318; }
+    .result { margin-bottom: 20px; }
+    .result-heading { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; overflow-wrap: anywhere; }
+    progress { width: 100%; height: 12px; accent-color: #5046d8; }
+    #summary { font-size: 1.2rem; font-weight: 650; overflow-wrap: anywhere; }
+    .footnote { text-align: center; font-size: .85rem; color: #53627a; margin-top: 24px; }
+    [hidden] { display: none !important; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; gap: 0; } main { padding: 28px 16px; } .card { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">TEACHABLE MACHINE / IMAGE MODEL</div>
+      <h1>What does your model see?</h1>
+      <p class="intro">Connect your model, choose an image, and see its predictions with one click.</p>
+    </header>
+    <section class="card" aria-labelledby="model-title">
+      <h2 id="model-title">1. Connect your model</h2>
+      <label for="model-url">Published model URL</label>
+      <input id="model-url" type="url" placeholder="https://teachablemachine.withgoogle.com/models/_WNFPDQM97/" aria-describedby="model-help" autocomplete="off" spellcheck="false">
+      <p id="model-help" class="hint">In Teachable Machine, select Export Model &gt; TensorFlow.js &gt; Upload my model, then paste the shareable link here. You can add it later.</p>
+    </section>
+    <div class="grid">
+      <section class="card" aria-labelledby="input-title">
+        <h2 id="input-title">2. Choose your image</h2>
+        <fieldset id="source-picker">
+          <legend>Image source</legend>
+          <div class="choices">
+            <label><input type="radio" name="source" value="upload" checked> Upload</label>
+            <label><input type="radio" name="source" value="webcam"> Webcam</label>
+          </div>
+        </fieldset>
+        <div id="upload-controls">
+          <label for="image-file">Image file</label>
+          <input id="image-file" type="file" accept="image/*" aria-describedby="image-help">
+          <p id="image-help" class="hint">Choose a browser-supported image, up to 10 MB.</p>
+        </div>
+        <div id="camera-controls" hidden>
+          <button id="start-camera" type="button" class="secondary">Start webcam</button>
+          <button id="stop-camera" type="button" class="secondary" disabled>Stop webcam</button>
+          <p class="hint">Allow camera access when prompted. Use localhost or HTTPS if your browser blocks camera access.</p>
+        </div>
+        <div class="preview">
+          <p id="placeholder" class="placeholder">Your image preview will appear here</p>
+          <img id="image-preview" alt="Selected image to classify" hidden>
+          <video id="video-preview" autoplay muted playsinline aria-label="Live webcam preview" hidden></video>
+        </div>
+        <p class="hint">The model sees the center square of your image. Webcam predictions use the mirrored view shown here.</p>
+        <button id="classify" type="button" disabled>Classify image</button>
+        <p id="status" role="status" aria-live="polite" aria-atomic="true">Add a model URL and an image to get started.</p>
+      </section>
+      <section class="card" id="results-panel" aria-labelledby="results-title" aria-busy="false">
+        <h2 id="results-title">3. Prediction results</h2>
+        <p id="summary" aria-live="polite">Ready when you are</p>
+        <p id="results-help" class="hint">Click Classify image to see each class and its confidence score. These are model estimates, not guarantees.</p>
+        <div id="results"></div>
+      </section>
+    </div>
+    <p class="footnote">Images stay in your browser. Internet access is needed to download the libraries and your model; no image is uploaded for prediction.</p>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+  <script>
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    const urlInput = $("model-url");
+    const fileInput = $("image-file");
+    const image = $("image-preview");
+    const video = $("video-preview");
+    let source = "upload";
+    let busy = false;
+    let imageReady = false;
+    let stream = null;
+    let model = null;
+    let loadedUrl = "";
+
+    function setStatus(message, error = false) {
+      $("status").textContent = message;
+      $("status").dataset.error = String(error);
+    }
+
+    function updateControls() {
+      urlInput.disabled = busy;
+      fileInput.disabled = busy;
+      $("source-picker").disabled = busy;
+      $("start-camera").disabled = busy || Boolean(stream);
+      $("stop-camera").disabled = busy || !stream;
+      const ready = source === "upload" ? imageReady : Boolean(stream) && video.readyState >= 2;
+      $("classify").disabled = busy || !ready || !urlInput.value.trim();
+      $("classify").textContent = busy ? "Please wait..." : "Classify image";
+      $("results-panel").setAttribute("aria-busy", String(busy));
+    }
+
+    function clearResults() {
+      $("results").replaceChildren();
+      $("summary").textContent = "Ready when you are";
+      $("results-help").hidden = false;
+    }
+
+    function modelBaseUrl() {
+      let url;
+      try { url = new URL(urlInput.value.trim()); }
+      catch { throw new Error("Enter a valid Teachable Machine model URL."); }
+      if (url.origin !== "https://teachablemachine.withgoogle.com" ||
+          !/^\/models\/[a-zA-Z0-9_-]+\/?(?:model\.json)?$/.test(url.pathname) ||
+          url.username || url.password) {
+        throw new Error("Use the published https://teachablemachine.withgoogle.com/models/MODEL_ID/ link.");
+      }
+      const modelId = url.pathname.split("/")[2];
+      return `https://teachablemachine.withgoogle.com/models/${modelId}/`;
+    }
+
+    function stopCamera() {
+      if (stream) stream.getTracks().forEach((track) => track.stop());
+      stream = null;
+      video.srcObject = null;
+      video.hidden = true;
+      $("placeholder").hidden = source === "upload" && imageReady;
+      updateControls();
+    }
+
+    urlInput.addEventListener("input", () => { clearResults(); updateControls(); });
+    document.querySelectorAll('input[name="source"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        source = radio.value;
+        stopCamera();
+        $("upload-controls").hidden = source !== "upload";
+        $("camera-controls").hidden = source !== "webcam";
+        image.hidden = source !== "upload" || !imageReady;
+        clearResults();
+        setStatus(source === "webcam" ? "Start the webcam to capture an image." : "Choose an image, then click Classify image.");
+        updateControls();
+      });
+    });
+
+    fileInput.addEventListener("change", async () => {
+      clearResults();
+      imageReady = false;
+      image.hidden = true;
+      image.removeAttribute("src");
+      $("placeholder").hidden = false;
+      const file = fileInput.files[0];
+      if (!file) { updateControls(); return; }
+      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+        setStatus("Choose an image file no larger than 10 MB.", true);
+        updateControls();
+        return;
+      }
+      busy = true;
+      updateControls();
+      const objectUrl = URL.createObjectURL(file);
+      try {
+        image.src = objectUrl;
+        await image.decode();
+        imageReady = true;
+        image.hidden = false;
+        $("placeholder").hidden = true;
+        setStatus("Image ready. Add your model URL, then click Classify image.");
+      } catch (error) {
+        console.error("Image loading failed:", error);
+        setStatus("This image could not be opened. Try a PNG, JPEG, or WebP file.", true);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+        busy = false;
+        updateControls();
+      }
+    });
+
+    $("start-camera").addEventListener("click", async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("Camera access is unavailable. Open the app on localhost or HTTPS, or upload an image.", true);
+        return;
+      }
+      busy = true;
+      clearResults();
+      setStatus("Waiting for camera permission...");
+      updateControls();
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+        video.srcObject = stream;
+        video.hidden = false;
+        await video.play();
+        $("placeholder").hidden = true;
+        stream.getVideoTracks()[0].addEventListener("ended", () => {
+          stopCamera();
+          clearResults();
+          setStatus("The camera disconnected. Restart it or upload an image.", true);
+        });
+        setStatus("Webcam ready. Click Classify image to predict the current frame.");
+      } catch (error) {
+        console.error("Camera startup failed:", error);
+        stopCamera();
+        setStatus(`Could not start the webcam: ${error.message} You can upload an image instead.`, true);
+      } finally {
+        busy = false;
+        updateControls();
+      }
+    });
+    video.addEventListener("loadeddata", updateControls);
+    $("stop-camera").addEventListener("click", () => {
+      stopCamera();
+      clearResults();
+      setStatus("Webcam stopped.");
+    });
+    window.addEventListener("pagehide", stopCamera);
+
+    $("classify").addEventListener("click", async () => {
+      busy = true;
+      clearResults();
+      updateControls();
+      let snapshot;
+      try {
+        const baseUrl = modelBaseUrl();
+        if (!window.tf || !window.tmImage) {
+          throw new Error("The prediction libraries did not load. Check your internet connection and reload the page.");
+        }
+        // Freeze the selected frame before downloading the model.
+        const input = source === "upload" ? image : video;
+        const width = source === "upload" ? image.naturalWidth : video.videoWidth;
+        const height = source === "upload" ? image.naturalHeight : video.videoHeight;
+        if (!width || !height) throw new Error("The image is not ready. Select an image or restart the webcam.");
+        const size = Math.min(width, height);
+        snapshot = document.createElement("canvas");
+        snapshot.width = snapshot.height = 224;
+        const context = snapshot.getContext("2d");
+        if (!context) throw new Error("Your browser could not create an image canvas.");
+        if (source === "webcam") { context.translate(224, 0); context.scale(-1, 1); }
+        context.drawImage(input, (width - size) / 2, (height - size) / 2, size, size, 0, 0, 224, 224);
+        if (!model || loadedUrl !== baseUrl) {
+          setStatus("Downloading your model. The first prediction may take a moment...");
+          const nextModel = await tmImage.load(baseUrl + "model.json", baseUrl + "metadata.json");
+          if (model) model.model.dispose();
+          model = nextModel;
+          loadedUrl = baseUrl;
+        }
+        setStatus("Classifying image...");
+        const predictions = await model.predict(snapshot);
+        if (!Array.isArray(predictions) || !predictions.length ||
+            predictions.some((item) => typeof item.className !== "string" ||
+              !Number.isFinite(item.probability) || item.probability < 0 || item.probability > 1)) {
+          throw new Error("The model returned invalid prediction data. Check that you exported an image model.");
+        }
+        predictions.sort((a, b) => b.probability - a.probability);
+        for (const prediction of predictions) {
+          const row = document.createElement("div");
+          row.className = "result";
+          const heading = document.createElement("div");
+          heading.className = "result-heading";
+          const label = document.createElement("span");
+          label.textContent = prediction.className;
+          const percentage = document.createElement("strong");
+          percentage.textContent = `${(prediction.probability * 100).toFixed(1)}%`;
+          const bar = document.createElement("progress");
+          bar.max = 1;
+          bar.value = prediction.probability;
+          bar.setAttribute("aria-label", `${prediction.className} confidence`);
+          heading.append(label, percentage);
+          row.append(heading, bar);
+          $("results").append(row);
+        }
+        $("summary").textContent = `Top match: ${predictions[0].className}`;
+        $("results-help").hidden = true;
+        setStatus(`Done. Displaying ${predictions.length} class predictions.`);
+      } catch (error) {
+        console.error("Prediction failed:", error);
+        $("summary").textContent = "Prediction unavailable";
+        setStatus(`${error.message} Check the model link and internet connection, then try again.`, true);
+      } finally {
+        if (snapshot) snapshot.width = snapshot.height = 0;
+        busy = false;
+        updateControls();
+      }
+    });
+  </script>
+</body>
+</html>
